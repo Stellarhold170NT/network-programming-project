@@ -1,0 +1,15 @@
+com\mycompany\soundquiz\server\dto\MessageResponse.class
+com\mycompany\soundquiz\server\dto\EmailMessage.class
+com\mycompany\soundquiz\server\service\MailService.class
+com\mycompany\soundquiz\server\model\User.class
+com\mycompany\soundquiz\server\service\ClientThread.class
+com\mycompany\soundquiz\server\dto\MessageRequest.class
+com\mycompany\soundquiz\server\service\Server.class
+com\mycompany\soundquiz\server\view\MainFrm.class
+com\mycompany\soundquiz\server\connection\DatabaseConnection.class
+com\mycompany\soundquiz\server\service\MailService$1.class
+com\mycompany\soundquiz\server\service\UserService.class
+com\mycompany\soundquiz\server\view\MainFrm$1.class
+com\mycompany\soundquiz\server\utils\Config.class
+com\mycompany\soundquiz\server\service\DatabaseService.class
+com\mycompany\soundquiz\server\SoundQuizClient.class
