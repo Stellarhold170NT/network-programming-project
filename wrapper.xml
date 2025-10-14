@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch4jConfig>
+  <dontWrapJar>false</dontWrapJar>
+  <headerType>gui</headerType>
+  <jar>C:\Users\Admin\Documents\NetBeansProjects\BTL-LTM-N8\SoundQuiz-Client\target\SoundQuiz-Client-1.0-SNAPSHOT.jar</jar>
+  <outfile>C:\Users\Admin\Documents\NetBeansProjects\BTL-LTM-N8\SoundQuiz-Client\target\SoundQuiz.exe</outfile>
+  <errTitle></errTitle>
+  <cmdLine></cmdLine>
+  <chdir>.</chdir>
+  <priority>normal</priority>
+  <downloadUrl></downloadUrl>
+  <supportUrl></supportUrl>
+  <stayAlive>false</stayAlive>
+  <restartOnCrash>false</restartOnCrash>
+  <manifest></manifest>
+  <icon>C:\Users\Admin\Documents\NetBeansProjects\BTL-LTM-N8\SoundQuiz-Client\target\SoundQuiz.ico</icon>
+  <jre>
+    <path>C:\Program Files\Java\jdk-17</path>
+    <requiresJdk>false</requiresJdk>
+    <requires64Bit>false</requires64Bit>
+    <minVersion>17.0.0</minVersion>
+    <maxVersion></maxVersion>
+  </jre>
+</launch4jConfig>

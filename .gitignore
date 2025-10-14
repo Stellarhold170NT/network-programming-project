@@ -1,0 +1,31 @@
+
+# Ignore IDE specific files
+.idea/
+*.iml
+*.iws
+nbproject/
+private/
+
+# Ignore Maven build output
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+
+# Ignore log files
+*.log
+
+# Ignore packaged executables and installers
+*.jar
+*.exe
+*.iss
+output/
+
+# Ignore user-specific config files
+**/config.properties
+
+# Ignore archives
+*.zip
