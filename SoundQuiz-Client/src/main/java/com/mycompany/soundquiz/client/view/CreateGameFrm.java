@@ -6,6 +6,7 @@ package com.mycompany.soundquiz.client.view;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import com.mycompany.soundquiz.client.connection.ClientConnection;
 import com.mycompany.soundquiz.client.connection.ClientNetwork;
 import com.mycompany.soundquiz.client.dto.MessageRequest;
 import com.mycompany.soundquiz.client.dto.MessageResponse;
@@ -18,6 +19,8 @@ import java.util.List;
 import javax.swing.SwingUtilities;
 import javax.swing.*;
 import com.mycompany.soundquiz.client.model.Music;
+import com.mycompany.soundquiz.client.model.Game_Room;
+
 /**
  *
  * @author Admin
@@ -61,6 +64,7 @@ public class CreateGameFrm extends javax.swing.JFrame {
                     
                     String reqId = UUID.randomUUID().toString();
                     request.setId(reqId); // dùng type tạm thời là reqId
+                    request.setUsername(ClientConnection.getInstance().getUsername());
 
                     // Đăng ký handler tạm thời dựa trên type
                     MessageRouter.getInstance().registerRequestHandler(reqId, response -> {
@@ -68,13 +72,11 @@ public class CreateGameFrm extends javax.swing.JFrame {
                             System.out.println("Tao tro choi : " + response.getMessage());
                             
                             Gson gson = new Gson();
-                            java.lang.reflect.Type musicListType = new TypeToken<List<Music>>() {
-                            }.getType();
-                            List<Music> musicList = gson.fromJson(response.getMessage(), musicListType);
-                            
+                            Game_Room room = gson.fromJson(response.getMessage(), Game_Room.class);
+
                             java.awt.EventQueue.invokeLater(() -> {
                                 CreateGameFrm.this.dispose();
-                                new PlayGameFrm(musicList).setVisible(true);
+                                new WaitingRoomFrm(room).setVisible(true);
                             });
                              
                             // TODO: mở GamePlayFrm hoặc xử lý danh sách bài hát ở đây

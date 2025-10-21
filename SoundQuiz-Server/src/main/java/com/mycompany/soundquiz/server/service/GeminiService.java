@@ -43,8 +43,9 @@ public class GeminiService {
                     if (res.candidates().isEmpty()) continue;
                     List<Part> parts = res.candidates().get().get(0).content().get().parts().get();
                     for (Part part : parts) {
-                        if (part.text() != null) {
-                            sb.append(part.text());
+                        java.util.Optional<String> textOpt = part.text();
+                        if (textOpt != null && textOpt.isPresent()) {
+                            sb.append(textOpt.get());
                         }
                     }
                 }

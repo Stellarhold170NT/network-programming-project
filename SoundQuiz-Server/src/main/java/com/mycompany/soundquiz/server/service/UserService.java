@@ -9,8 +9,7 @@ import java.security.NoSuchAlgorithmException;
 import java.sql.SQLException;
 import com.mycompany.soundquiz.server.model.User;
 import java.text.DecimalFormat;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 /**
  *
  * @author Admin
@@ -58,6 +57,28 @@ public class UserService {
         return null;
     }
     
+    public List<String> loadPlayers() throws SQLException{
+        String sql = "SELECT * FROM users";
+        List<Map<String, Object>> lst = dbService.executeQuery(sql);
+        
+        List<String> result = new ArrayList<>();
+        for (Map<String, Object> row : lst) {
+            result.add((String)row.get("username"));
+        }
+        return result;
+    } 
+    
+    public List<String> rankingPlayers() throws SQLException {
+        String sql = "SELECT * FROM users ORDER BY total_wins DESC";
+        List<Map<String, Object>> lst = dbService.executeQuery(sql);
+        
+        List<String> result = new ArrayList<>();
+        for (Map<String, Object> row : lst) {
+            result.add((String)row.get("username"));
+        }
+        return result;
+    }
+    
     public boolean isUsernameExists(String username) throws SQLException {
         String sql = "SELECT id FROM users WHERE username = ?";
         return dbService.queryOne(sql, username) != null;
@@ -86,6 +107,20 @@ public class UserService {
     public boolean verifyPassword(String password, String hashed) {
         System.out.println(hashPassword(password) + " | " + hashed);
         return hashPassword(password).equals(hashed);
+    }
+    
+    public User findUserByUsername(String username) throws SQLException {
+        String sql = "SELECT * FROM users where username = ?";
+        Map<String, Object> row = dbService.queryOne(sql, username);
+        if (row == null) return null;
+        return mapToUser(row);
+    }
+
+    public User findUserById(int userId) throws SQLException {
+        String sql = "SELECT * FROM users WHERE id = ?";
+        Map<String, Object> row = dbService.queryOne(sql, userId);
+        if (row == null) return null;
+        return mapToUser(row);
     }
     
     private User mapToUser(Map<String, Object> row) {

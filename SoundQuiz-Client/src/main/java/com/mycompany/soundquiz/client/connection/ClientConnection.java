@@ -14,6 +14,7 @@ import java.net.Socket;
 public class ClientConnection {
     private static ClientConnection instance;
     private Socket socket;
+    private String username;
 
     private ClientConnection() {}
 
@@ -22,6 +23,14 @@ public class ClientConnection {
             instance = new ClientConnection();
         }
         return instance;
+    }
+    
+    public void setUsername(String username) {
+        this.username = username;
+    }
+    
+    public String getUsername() {
+        return this.username;
     }
 
     public void connect(String ip, int port) throws IOException {

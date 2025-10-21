@@ -6,6 +6,7 @@ package com.mycompany.soundquiz.server.service;
 
 import  com.mycompany.soundquiz.server.model.User;
 import  com.mycompany.soundquiz.server.model.Music;
+import  com.mycompany.soundquiz.server.model.Game_Room;
 
 /**
  *
@@ -14,6 +15,8 @@ import  com.mycompany.soundquiz.server.model.Music;
 
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.mycompany.soundquiz.server.dto.EmailMessage;
 import com.mycompany.soundquiz.server.dto.MessageRequest;
 import com.mycompany.soundquiz.server.dto.MessageResponse;
@@ -71,6 +74,18 @@ public class ClientThread extends Thread {
                     break;
                 case "getSegment": // request 2: lấy 5 giây ngẫu nhiên
                     handleGetSegment(request);
+                    break;
+                case "load_players":
+                    handleLoadPlayers(request);
+                    break;
+                case "ranking_players":
+                    handleRankingPlayers(request);
+                    break;
+                case "invice_user":
+                    handleInviceUser(request);
+                    break;
+                case "accept":
+                    handleAccept(request);
                     break;
                 case "challenge":
                     break;
@@ -142,6 +157,29 @@ public class ClientThread extends Thread {
         }
     }
     
+    private void handleLoadPlayers(MessageRequest request) {
+        try {
+            List<String> result = Server.getInstance().loadPlayers();
+            String msg = new Gson().toJson(result);
+            
+            sendWithType(MessageResponse.SUCCESS, request.getId(), request.getType(), msg);
+            
+        } catch (Exception e) {
+            
+        }
+    }
+    
+    private void handleRankingPlayers(MessageRequest request) {
+        try {
+            List<String> result = userService.rankingPlayers();
+            String msg = new Gson().toJson(result);
+            
+            sendWithType(MessageResponse.SUCCESS, request.getId(), request.getType(), msg);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    
     private void close() {
         try {
             Server.getInstance().removePlayer(username);
@@ -205,7 +243,7 @@ public class ClientThread extends Thread {
         // Tạo prompt gửi cho Gemini
         String prompt = "Extract moods from this text: \"" + userInput + "\". "
                 + "Available moods are: [" + moodListStr + "]. "
-                + "Return only JSON object exactly like {\"moodIds\":[1,3,5],\"quantity\":1} "
+                + "Return only JSON object exactly like {\"moodIds\":[1,3,5],\"quantity\":2} "
                 + "Do not add any explanation or extra text.";
 
         // Gọi Gemini
@@ -231,6 +269,65 @@ public class ClientThread extends Thread {
             // Fallback JSON khi parse lỗi
             jsonOnly = "{\"moodIds\":[1],\"quantity\":5}";
         }
+
+        return jsonOnly;
+    }
+    
+    private String summary(String listSong) {
+        String prompt = "Danh sách bài hát: " + listSong
+                + ". Viết TRỰC TIẾP một đoạn giới thiệu mơ hồ (không nói thẳng vào bài hát) "
+                + "kiểu mơ mộng, khoảng 60 từ. "
+                + "KHÔNG thêm lời mở đầu, KHÔNG thêm giải thích, CHỈ trả về nội dung đoạn văn.";
+
+        // Gọi Gemini
+        String response = GeminiService.chat(prompt).trim();
+
+        // Loại bỏ phần giải thích thừa nếu có (ví dụ: "Tuyệt vời, đây là...:")
+        // Nếu có dấu ":", lấy phần sau dấu ":" cuối cùng
+        int lastColonIndex = response.lastIndexOf(":");
+        if (lastColonIndex > 0 && lastColonIndex < response.length() - 10) {
+            // Có dấu ":" và sau nó còn nhiều text (>10 ký tự) => có thể là phần giải thích thừa
+            String afterColon = response.substring(lastColonIndex + 1).trim();
+            if (afterColon.length() > 50) { // Nếu phần sau dài đủ
+                response = afterColon;
+            }
+        }
+
+        // Loại bỏ dấu ngoặc kép nếu có bao quanh
+        if (response.startsWith("\"") && response.endsWith("\"")) {
+            response = response.substring(1, response.length() - 1);
+        }
+
+        return response.trim();
+    }
+    
+    private String createQuestion(String listSong) {
+        String prompt = "Bài hát: " + listSong
+                + ". Hãy tạo một câu hỏi trắc nghiệm về TÊN BÀI HÁT. "
+                + "Câu hỏi phải là 'Tên bài hát là gì?' hoặc tương tự. "
+                + "Đáp án đúng (answer) phải là tên bài hát chính xác từ dữ liệu đã cho. "
+                + "3 đáp án còn lại phải là tên bài hát giả tưởng nhưng hợp lý (không trùng tên thật). "
+                + "Trả về ĐÚNG định dạng JSON (KHÔNG thêm markdown ```json), ví dụ: "
+                + "{\"title\": \"Tên bài hát là gì?\", "
+                + "\"A\": \"Tên bài đúng\", "
+                + "\"B\": \"Tên bài giả 1\", "
+                + "\"C\": \"Tên bài giả 2\", "
+                + "\"D\": \"Tên bài giả 3\", "
+                + "\"answer\": \"A\"}";
+
+        String response = GeminiService.chat(prompt);
+
+        // Loại bỏ markdown wrapper ```json ... ``` nếu có
+        String jsonOnly = response.trim();
+        if (jsonOnly.startsWith("```json")) {
+            jsonOnly = jsonOnly.substring(7); // Bỏ ```json
+        } else if (jsonOnly.startsWith("```")) {
+            jsonOnly = jsonOnly.substring(3); // Bỏ ```
+        }
+        if (jsonOnly.endsWith("```")) {
+            jsonOnly = jsonOnly.substring(0, jsonOnly.length() - 3); // Bỏ ``` cuối
+        }
+        jsonOnly = jsonOnly.trim();
 
         return jsonOnly;
     }
@@ -273,8 +370,14 @@ public class ClientThread extends Thread {
 
             MusicService musicService = MusicService.getInstance();
             List<Map<String, Object>> songs = musicService.getRandomSongs(moodIds, quantity);
+            
+            String summarySong = summary(gson.toJson(songs));
+            String questionSong = createQuestion(gson.toJson(songs));
+            
+            Game_Room game_room = GameService.getInstance().createRoom(username, "", gson.toJson(songs), summarySong, questionSong);
+            
 
-            sendWithType(MessageResponse.SUCCESS, request.getId(), "getSongs", gson.toJson(songs));
+            sendWithType(MessageResponse.SUCCESS, request.getId(), "getSongs", gson.toJson(game_room));
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -312,6 +415,34 @@ public class ClientThread extends Thread {
         } catch (Exception e) {
             e.printStackTrace();
             sendWithType(MessageResponse.FAILED, request.getId(), "getSegment", "Lỗi khi lấy đoạn nhạc");
+        }
+    }
+    
+    private void handleInviceUser(MessageRequest request) {
+        System.out.println("handleInviceUser call");
+        try {
+            JsonObject obj = JsonParser.parseString(request.getContent()).getAsJsonObject();
+            int roomId = obj.get("roomId").getAsInt();
+            String inviceUser = obj.get("invitee").getAsString();
+            String fromUser = request.getUsername();
+            Gson gson = new Gson();
+            
+            
+            JsonObject objReturn = new JsonObject();
+            objReturn.addProperty("fromUser", fromUser);
+            objReturn.addProperty("room", gson.toJson(GameService.getInstance().getRoomById(roomId)));
+            Server.getInstance().sendMessage(fromUser, inviceUser, objReturn.toString());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    
+    private void handleAccept(MessageRequest request) {
+        System.out.println("handleAccept call");
+        try {
+            GameService.getInstance().addPlayer(Integer.parseInt(request.getContent()), request.getUsername());
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 }

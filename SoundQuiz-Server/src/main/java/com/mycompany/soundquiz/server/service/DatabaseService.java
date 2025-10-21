@@ -55,9 +55,28 @@ public class DatabaseService {
     public int executeUpdate(String sql, Object... params) throws SQLException {
         try (Connection conn = dbConnection.getConnection()) {
             PreparedStatement stmt = conn.prepareStatement(sql);
-            
+
             setParameters(stmt, params);
             return stmt.executeUpdate();
+        }
+    }
+
+    // dành cho INSERT và trả về generated key (auto increment ID)
+    public int executeInsert(String sql, Object... params) throws SQLException {
+        try (Connection conn = dbConnection.getConnection()) {
+            PreparedStatement stmt = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS);
+
+            setParameters(stmt, params);
+            int affectedRows = stmt.executeUpdate();
+
+            if (affectedRows > 0) {
+                try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
+                    if (generatedKeys.next()) {
+                        return generatedKeys.getInt(1);
+                    }
+                }
+            }
+            return -1; // Không có key được tạo
         }
     }
     

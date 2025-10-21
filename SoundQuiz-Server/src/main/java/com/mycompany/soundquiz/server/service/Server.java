@@ -84,4 +84,19 @@ public class Server {
             handler.sendWithType(MessageResponse.SUCCESS, null, "online_players", msg);
         }
     }
+    
+    public void sendMessage(String from, String to, String message) {
+        ClientThread clientThread = onlinePlayers.get(to);
+        clientThread.sendWithType(MessageResponse.SUCCESS, null, "invice_game", message);
+    }
+    
+    public void sendSelfMessage(String type, String to, String message) {
+        ClientThread clientThread = onlinePlayers.get(to);
+        clientThread.sendWithType(MessageResponse.SUCCESS, null, type, message);
+    }
+    
+    public List<String> loadPlayers() {
+        List<String> players = new ArrayList<>(onlinePlayers.keySet());
+        return players;
+    }
 }
