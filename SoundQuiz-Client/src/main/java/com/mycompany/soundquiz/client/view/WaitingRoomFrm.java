@@ -6,6 +6,7 @@ package com.mycompany.soundquiz.client.view;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.mycompany.soundquiz.client.connection.ClientConnection;
 import com.mycompany.soundquiz.client.connection.ClientNetwork;
 import com.mycompany.soundquiz.client.connection.MessageRouter;
@@ -138,8 +139,44 @@ public class WaitingRoomFrm extends javax.swing.JFrame {
                 }
             });
         });
-        
-        
+
+        // Broadcast handler: start_game
+        MessageRouter.getInstance().registerBroadcastHandler("start_game", response -> {
+            SwingUtilities.invokeLater(() -> {
+                try {
+                    JsonObject data = new Gson().fromJson(response.getMessage(), JsonObject.class);
+                    String listSongJson = data.get("listSong").getAsString();
+                    String questionJson = data.get("question").getAsString();
+                    int roomId = data.get("roomId").getAsInt();
+
+                    // Close waiting room and open play game
+                    WaitingRoomFrm.this.dispose();
+                    new PlayGameFrm(listSongJson, questionJson, roomId).setVisible(true);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
+        });
+
+        // Button "Bắt đầu" handler
+        btnCreateGame.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                MessageRequest request = new MessageRequest();
+                String reqId = UUID.randomUUID().toString();
+                request.setId(reqId);
+                request.setUsername(ClientConnection.getInstance().getUsername());
+                request.setType("start_game");
+                request.setContent(String.valueOf(room.getId()));
+
+                MessageRouter.getInstance().registerRequestHandler(reqId, response -> {
+                    System.out.println("Game started: " + response.getMessage());
+                });
+
+                clientNetwork.sendMessage(request);
+            }
+        });
+
     }
     
     

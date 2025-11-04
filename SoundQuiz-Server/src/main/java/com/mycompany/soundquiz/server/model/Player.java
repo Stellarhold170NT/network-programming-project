@@ -12,6 +12,7 @@ public class Player {
     private int id;
     private int room_id;
     private int user_id;
+    private int point;
 
     public Player() {}
 
@@ -19,6 +20,7 @@ public class Player {
         this.id = id;
         this.room_id = room_id;
         this.user_id = user_id;
+        this.point = 0;
     }
 
     // Getter và Setter cho id
@@ -28,6 +30,14 @@ public class Player {
 
     public void setId(int id) {
         this.id = id;
+    }
+
+    public void setPoint(int point) {
+        this.point = point;
+    }
+
+    public int getPoint() {
+        return this.point;
     }
 
     // Getter và Setter cho room_id

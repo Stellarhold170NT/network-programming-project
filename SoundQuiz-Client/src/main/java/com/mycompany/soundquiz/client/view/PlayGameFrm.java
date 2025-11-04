@@ -4,11 +4,16 @@
  */
 package com.mycompany.soundquiz.client.view;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.reflect.TypeToken;
+import com.mycompany.soundquiz.client.connection.ClientConnection;
 import com.mycompany.soundquiz.client.connection.ClientNetwork;
 import com.mycompany.soundquiz.client.connection.MessageRouter;
 import com.mycompany.soundquiz.client.dto.MessageRequest;
 import com.mycompany.soundquiz.client.dto.MessageResponse;
 import com.mycompany.soundquiz.client.model.Music;
+import com.mycompany.soundquiz.client.model.Question;
 import java.io.ByteArrayInputStream;
 import java.util.List;
 import java.util.UUID;
@@ -18,6 +23,8 @@ import javax.sound.sampled.Clip;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import java.util.Base64;
+import java.util.Timer;
+import java.util.TimerTask;
 
 
 /**
@@ -26,9 +33,53 @@ import java.util.Base64;
  */
 public class PlayGameFrm extends javax.swing.JFrame {
     private ClientNetwork clientNetwork;
+    private List<Music> songs;
+    private Question question;
+    private int roomId;
+    private int currentQuestionIndex;
+    private int myScore;
+    private Timer gameTimer;
+    private Clip currentClip;
 
     /**
-     * Creates new form PlayGameFrm
+     * Constructor mới cho game flow
+     */
+    public PlayGameFrm(String listSongJson, String questionJson, int roomId) {
+        this.roomId = roomId;
+        this.currentQuestionIndex = 0;
+        this.myScore = 0;
+        this.gameTimer = new Timer();
+
+        initComponents();
+        setLocationRelativeTo(null);
+
+        try {
+            clientNetwork = ClientNetwork.getInstance();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        // Parse songs and question
+        Gson gson = new Gson();
+        java.lang.reflect.Type listType = new TypeToken<List<Music>>() {}.getType();
+        this.songs = gson.fromJson(listSongJson, listType);
+        this.question = gson.fromJson(questionJson, Question.class);
+
+        // Setup UI with question
+        setupQuestionUI();
+        disableAnswers();
+
+        // Register broadcast for final scores
+        MessageRouter.getInstance().registerBroadcastHandler("final_scores", response -> {
+            SwingUtilities.invokeLater(() -> handleFinalScores(response.getMessage()));
+        });
+
+        // Start game
+        startNextQuestion();
+    }
+
+    /**
+     * Constructor cũ (deprecated)
      */
     public PlayGameFrm(List<Music> listMusic) {
         initComponents();
@@ -207,26 +258,87 @@ public class PlayGameFrm extends javax.swing.JFrame {
     }// </editor-fold>//GEN-END:initComponents
 
     private void jRadioButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jRadioButton2ActionPerformed
+        // Answer A selected
+    }//GEN-LAST:event_jRadioButton2ActionPerformed
+
+    // ===== GAME LOGIC METHODS =====
+
+    private void setupQuestionUI() {
+        setTitle(question.getTitle());
+        jRadioButton2.setText(question.getA());
+        jRadioButton3.setText(question.getB());
+        jRadioButton4.setText(question.getC());
+        jRadioButton5.setText(question.getD());
+        buttonGroup1.clearSelection();
+    }
+
+    private void startNextQuestion() {
+        if (currentQuestionIndex >= songs.size()) {
+            finishGame();
+            return;
+        }
+
+        Music currentSong = songs.get(currentQuestionIndex);
+        setTitle("Q" + (currentQuestionIndex + 1) + "/" + songs.size() + " | Score: " + myScore);
+
+        buttonGroup1.clearSelection();
+        disableAnswers();
+
+        // Show image
+        img.setContentType("text/html");
+        img.setText("<html><img src='" + currentSong.getImage() + "' width='200'></html>");
+        img.setEditable(false);
+        img.setOpaque(false);
+        img.setBorder(null);
+        img.setHighlighter(null);
+        img.setCaret(null);
+
+        // Phase 1: Play 5s preview
+        playAudioSegment(currentSong.getFileName(), 5, () -> {
+            // Phase 2: 10s answer time
+            enableAnswers();
+            startCountdown(10, () -> {
+                // Phase 3: Check answer and play 20s result
+                disableAnswers();
+                checkAnswer();
+                String resultFile = currentSong.getFileName().replace(".wav", "-result.wav");
+                playAudioSegment(resultFile, 20, () -> {
+                    currentQuestionIndex++;
+                    startNextQuestion();
+                });
+            });
+        });
+    }
+
+    private void playAudioSegment(String songFile, int seconds, Runnable onComplete) {
         MessageRequest request = new MessageRequest();
         request.setType("getSegment");
-        request.setContent("{\"songFile\":\"" + "tinh-ve-result.wav"+ "\",\"segmentSeconds\":170}");
+        request.setContent("{\"songFile\":\"" + songFile + "\",\"segmentSeconds\":" + seconds + "}");
         String reqId = UUID.randomUUID().toString();
-        request.setId(reqId); 
-        
-        
+        request.setId(reqId);
+
         MessageRouter.getInstance().registerRequestHandler(reqId, response -> {
             SwingUtilities.invokeLater(() -> {
-                
                 if (MessageResponse.SUCCESS.equals(response.getStatus())) {
                     String base64Data = response.getMessage();
                     byte[] audioBytes = Base64.getDecoder().decode(base64Data);
 
-                    try (ByteArrayInputStream bais = new ByteArrayInputStream(audioBytes); 
-                            AudioInputStream audioStream = AudioSystem.getAudioInputStream(bais)) {
+                    try (ByteArrayInputStream bais = new ByteArrayInputStream(audioBytes);
+                         AudioInputStream audioStream = AudioSystem.getAudioInputStream(bais)) {
 
-                        Clip clip = AudioSystem.getClip();
-                        clip.open(audioStream);
-                        clip.start();
+                        stopCurrentAudio();
+                        currentClip = AudioSystem.getClip();
+                        currentClip.open(audioStream);
+                        currentClip.start();
+
+                        gameTimer.schedule(new TimerTask() {
+                            @Override
+                            public void run() {
+                                SwingUtilities.invokeLater(() -> {
+                                    if (onComplete != null) onComplete.run();
+                                });
+                            }
+                        }, seconds * 1000);
 
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -236,9 +348,148 @@ public class PlayGameFrm extends javax.swing.JFrame {
             });
         });
 
-        // Gửi request
         clientNetwork.sendMessage(request);
-    }//GEN-LAST:event_jRadioButton2ActionPerformed
+    }
+
+    private void startCountdown(int seconds, Runnable onComplete) {
+        final int[] remaining = {seconds};
+
+        TimerTask task = new TimerTask() {
+            @Override
+            public void run() {
+                SwingUtilities.invokeLater(() -> {
+                    remaining[0]--;
+                    setTitle("Q" + (currentQuestionIndex + 1) + "/" + songs.size() +
+                            " | Time: " + remaining[0] + "s | Score: " + myScore);
+
+                    if (remaining[0] <= 0) {
+                        this.cancel();
+                        if (onComplete != null) onComplete.run();
+                    }
+                });
+            }
+        };
+
+        gameTimer.scheduleAtFixedRate(task, 1000, 1000);
+    }
+
+    private void checkAnswer() {
+        String selected = getSelectedAnswer();
+        if (selected != null && selected.equals(question.getAnswer())) {
+            myScore++;
+            setTitle("Q" + (currentQuestionIndex + 1) + "/" + songs.size() + " | CORRECT! Score: " + myScore);
+        } else {
+            setTitle("Q" + (currentQuestionIndex + 1) + "/" + songs.size() + " | Wrong. Score: " + myScore);
+        }
+    }
+
+    private String getSelectedAnswer() {
+        if (jRadioButton2.isSelected()) return "A";
+        if (jRadioButton3.isSelected()) return "B";
+        if (jRadioButton4.isSelected()) return "C";
+        if (jRadioButton5.isSelected()) return "D";
+        return null;
+    }
+
+    private void enableAnswers() {
+        jRadioButton2.setEnabled(true);
+        jRadioButton3.setEnabled(true);
+        jRadioButton4.setEnabled(true);
+        jRadioButton5.setEnabled(true);
+    }
+
+    private void disableAnswers() {
+        jRadioButton2.setEnabled(false);
+        jRadioButton3.setEnabled(false);
+        jRadioButton4.setEnabled(false);
+        jRadioButton5.setEnabled(false);
+    }
+
+    private void stopCurrentAudio() {
+        if (currentClip != null && currentClip.isRunning()) {
+            currentClip.stop();
+            currentClip.close();
+        }
+    }
+
+    private void finishGame() {
+        stopCurrentAudio();
+        if (gameTimer != null) gameTimer.cancel();
+
+        // Chỉ gọi submitScore, nó sẽ tự gọi sendLeaveRoom sau khi hoàn tất
+        submitScore();
+
+        JOptionPane.showMessageDialog(this,
+                "Game finished! Your score: " + myScore + "/" + songs.size() +
+                "\n\nWaiting for other players...",
+                "Game Over", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void submitScore() {
+        try {
+            JsonObject data = new JsonObject();
+            data.addProperty("roomId", roomId);
+            data.addProperty("score", myScore);
+
+            MessageRequest request = new MessageRequest();
+            request.setType("submit_score");
+            request.setContent(data.toString());
+            request.setUsername(ClientConnection.getInstance().getUsername());
+            String reqId = UUID.randomUUID().toString();
+            request.setId(reqId);
+
+            MessageRouter.getInstance().registerRequestHandler(reqId, response -> {
+                System.out.println("Score submitted: " + response.getMessage());
+
+                // Sau khi submit score thành công, mới gửi leave room
+                // Đảm bảo điểm đã được lưu vào database trước khi trigger final calculation
+                sendLeaveRoom();
+
+                MessageRouter.getInstance().unregisterRequestHandler(reqId);
+            });
+
+            clientNetwork.sendMessage(request);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void sendLeaveRoom() {
+        try {
+            MessageRequest request = new MessageRequest();
+            request.setType("leave_room");
+            request.setContent(String.valueOf(roomId));
+            request.setUsername(ClientConnection.getInstance().getUsername());
+            String reqId = UUID.randomUUID().toString();
+            request.setId(reqId);
+
+            clientNetwork.sendMessage(request);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void handleFinalScores(String message) {
+        try {
+            JsonObject data = new Gson().fromJson(message, JsonObject.class);
+            String winner = data.get("winner").getAsString();
+            JsonObject scores = data.getAsJsonObject("finalScores");
+
+            StringBuilder result = new StringBuilder("=== FINAL SCORES ===\n\n");
+            scores.entrySet().forEach(entry -> {
+                result.append(entry.getKey()).append(": ").append(entry.getValue()).append(" points\n");
+            });
+            result.append("\nWinner: ").append(winner).append("!");
+
+            JOptionPane.showMessageDialog(this, result.toString(), "Game Results", JOptionPane.INFORMATION_MESSAGE);
+
+            this.dispose();
+            new HomeFrm(ClientConnection.getInstance().getUsername()).setVisible(true);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
     /**
      * @param args the command line arguments

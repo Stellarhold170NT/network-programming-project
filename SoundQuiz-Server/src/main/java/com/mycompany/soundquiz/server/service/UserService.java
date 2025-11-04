@@ -141,4 +141,17 @@ public class UserService {
         String code = df.format(ran.nextInt(1000000));  //  Random from 0 to 999999
         return code;
     }
+
+    /**
+     * Cập nhật thống kê game của user
+     */
+    public void updateGameStats(String username, int pointsToAdd, int winsToAdd, int gamesToAdd) {
+        try {
+            String sql = "UPDATE users SET total_points = total_points + ?, total_wins = total_wins + ?, total_games = total_games + ? WHERE username = ?";
+            dbService.executeUpdate(sql, pointsToAdd, winsToAdd, gamesToAdd, username);
+            System.out.println("Updated stats for " + username + ": +" + pointsToAdd + " points, +" + winsToAdd + " wins, +" + gamesToAdd + " games");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 }

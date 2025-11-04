@@ -278,11 +278,106 @@ public class GameService {
         try {
             String sql = "UPDATE game_room SET name = ?, description = ?, listSong = ?, question = ? WHERE id = ?";
             int result = dbService.executeUpdate(sql, room.getName(), room.getDescription(), room.getListSong(), room.getQuestion(), room.getId());
-            
+
             return result > 0;
         } catch (SQLException e) {
             e.printStackTrace();
             return false;
+        }
+    }
+
+    /**
+     * Lưu điểm của player vào database
+     */
+    public void savePlayerScore(int roomId, String username, int score) {
+        try {
+            User user = userService.findUserByUsername(username);
+            if (user == null) {
+                return;
+            }
+
+            String sql = "UPDATE player SET point = ? WHERE room_id = ? AND user_id = ?";
+            dbService.executeUpdate(sql, score, roomId, user.getId());
+
+            System.out.println("Saved score: " + username + " = " + score + " in room " + roomId);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    // Track players who have left the room
+    private Map<Integer, Set<String>> roomLeavePlayers = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Xử lý khi player rời phòng
+     * Khi tất cả players đã rời → tính điểm cuối và cập nhật User table
+     */
+    public void handlePlayerLeave(int roomId, String username) {
+        try {
+            // Add to leave set
+            roomLeavePlayers.putIfAbsent(roomId, new java.util.concurrent.ConcurrentHashMap<String, Boolean>().keySet(true));
+            roomLeavePlayers.get(roomId).add(username);
+
+            // Get all players in room
+            List<User> allPlayers = getPlayersInRoom(roomId);
+
+            // Check if all players have left
+            if (roomLeavePlayers.get(roomId).size() >= allPlayers.size()) {
+                calculateAndBroadcastFinalScores(roomId, allPlayers);
+                roomLeavePlayers.remove(roomId);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Tính điểm cuối cùng và broadcast cho tất cả players
+     */
+    private void calculateAndBroadcastFinalScores(int roomId, List<User> players) {
+        try {
+            com.google.gson.Gson gson = new com.google.gson.Gson();
+            java.util.Map<String, Integer> finalScores = new java.util.HashMap<>();
+            String winner = null;
+            int maxScore = -1;
+
+            // Get scores from database
+            for (User user : players) {
+                String sql = "SELECT point FROM player WHERE room_id = ? AND user_id = ?";
+                Map<String, Object> result = dbService.queryOne(sql, roomId, user.getId());
+
+                if (result != null) {
+                    int score = ((Number) result.get("point")).intValue();
+                    finalScores.put(user.getUsername(), score);
+
+                    if (score > maxScore) {
+                        maxScore = score;
+                        winner = user.getUsername();
+                    }
+                }
+            }
+
+            // Update User table
+            for (User user : players) {
+                int score = finalScores.getOrDefault(user.getUsername(), 0);
+                int wins = user.getUsername().equals(winner) ? 1 : 0;
+                userService.updateGameStats(user.getUsername(), score, wins, 1);
+            }
+
+            // Prepare broadcast data
+            com.google.gson.JsonObject finalData = new com.google.gson.JsonObject();
+            finalData.add("finalScores", gson.toJsonTree(finalScores));
+            finalData.addProperty("winner", winner);
+
+            // Broadcast to all players
+            for (User user : players) {
+                Server.getInstance().sendSelfMessage("final_scores", user.getUsername(), finalData.toString());
+            }
+
+            System.out.println("Final scores calculated for room " + roomId + ". Winner: " + winner);
+
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 }

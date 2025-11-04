@@ -87,6 +87,15 @@ public class ClientThread extends Thread {
                 case "accept":
                     handleAccept(request);
                     break;
+                case "start_game":
+                    handleStartGame(request);
+                    break;
+                case "submit_score":
+                    handleSubmitScore(request);
+                    break;
+                case "leave_room":
+                    handleLeaveRoom(request);
+                    break;
                 case "challenge":
                     break;
             }
@@ -441,6 +450,71 @@ public class ClientThread extends Thread {
         System.out.println("handleAccept call");
         try {
             GameService.getInstance().addPlayer(Integer.parseInt(request.getContent()), request.getUsername());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void handleStartGame(MessageRequest request) {
+        System.out.println("handleStartGame call");
+        try {
+            int roomId = Integer.parseInt(request.getContent());
+            Game_Room room = GameService.getInstance().getRoomById(roomId);
+
+            if (room == null) {
+                sendWithType(MessageResponse.FAILED, request.getId(), "start_game", "Room not found");
+                return;
+            }
+
+            // Get all players in room
+            List<User> players = GameService.getInstance().getPlayersInRoom(roomId);
+
+            // Prepare game data
+            JsonObject gameData = new JsonObject();
+            gameData.addProperty("roomId", roomId);
+            gameData.addProperty("listSong", room.getListSong());
+            gameData.addProperty("question", room.getQuestion());
+
+            // Broadcast start_game to all players in room
+            for (User player : players) {
+                Server.getInstance().sendSelfMessage("start_game", player.getUsername(), gameData.toString());
+            }
+
+            sendWithType(MessageResponse.SUCCESS, request.getId(), "start_game", "Game started");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            sendWithType(MessageResponse.FAILED, request.getId(), "start_game", "Error starting game");
+        }
+    }
+
+    private void handleSubmitScore(MessageRequest request) {
+        System.out.println("handleSubmitScore call");
+        try {
+            JsonObject data = JsonParser.parseString(request.getContent()).getAsJsonObject();
+            int roomId = data.get("roomId").getAsInt();
+            int score = data.get("score").getAsInt();
+            String username = request.getUsername();
+
+            // Save score to Player table
+            GameService.getInstance().savePlayerScore(roomId, username, score);
+
+            sendWithType(MessageResponse.SUCCESS, request.getId(), "submit_score", "Score saved");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            sendWithType(MessageResponse.FAILED, request.getId(), "submit_score", "Error saving score");
+        }
+    }
+
+    private void handleLeaveRoom(MessageRequest request) {
+        System.out.println("handleLeaveRoom call");
+        try {
+            int roomId = Integer.parseInt(request.getContent());
+
+            // Check if all players have left and submitted scores
+            GameService.getInstance().handlePlayerLeave(roomId, request.getUsername());
+
         } catch (Exception e) {
             e.printStackTrace();
         }
